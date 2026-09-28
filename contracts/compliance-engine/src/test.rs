@@ -147,6 +147,18 @@ fn test_update_holder_since_rejects_negative_timestamp() {
 }
 
 #[test]
+fn test_update_holder_since_rejects_zero_timestamp() {
+    let (env, ce, _) = setup();
+    let holder = Address::generate(&env);
+
+    assert_eq!(
+        ce.try_update_holder_since(&holder, &0),
+        Err(Ok(Error::from(ComplianceError::InvalidHolderSince)))
+    );
+    assert!(!ce.lockup_status(&holder).is_holder);
+}
+
+#[test]
 fn test_max_holders_blocks_new_but_allows_existing() {
     let (env, ce, _) = setup();
     let h1 = Address::generate(&env);
