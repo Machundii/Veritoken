@@ -166,6 +166,23 @@ fn test_transfer_rejects_blank_kyc_reference() {
 }
 
 #[test]
+fn test_evaluate_transfer_kyc_rejects_unapproved_recipient() {
+    let h = setup();
+    let alice = Address::generate(&h.env);
+    h.approve_kyc(&alice);
+    h.token.issue(&inv_id(&h.env), &alice, &1_000);
+
+    // carol has no KYC record — the fail-fast guard in evaluate_transfer_kyc
+    // must reject the missing KYC reference before the compliance engine runs.
+    let carol = Address::generate(&h.env);
+    assert_eq!(
+        h.token
+            .try_transfer(&inv_id(&h.env), &alice, &carol, &100),
+        Err(Ok(InvoiceError::KycNotApproved.into()))
+    );
+}
+
+#[test]
 fn test_transfer_blocked_after_due_date() {
     let h = setup();
     let alice = Address::generate(&h.env);
