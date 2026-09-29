@@ -2020,3 +2020,35 @@ fn test_create_invoice_non_empty_id_accepted() {
     h.token.create_invoice(&h.make_invoice("VALID-ID"));
     assert_eq!(h.token.list_invoices(&0, &50).len(), 2);
 }
+
+// Fix #847 — append_journal_entry: reject empty event tags
+// Before the fix, there was no public append_journal_entry entry point.
+// A journal entry recorded without a meaningful tag would make the lifecycle
+// audit log harder to inspect and would reduce confidence in the audit record.
+// The new function requires a non-empty event_tag and panics with
+// EmptyEventTag before any state is written when the string is empty.
+#[test]
+fn test_append_journal_entry_rejects_empty_event_tag() {
+    use crate::InvoiceError;
+    use soroban_sdk::Error;
+
+    let h = setup();
+    let id = inv_id(&h.env);
+    let empty_tag = String::from_str(&h.env, "");
+
+    // An empty event tag must be rejected — journal length must not change.
+    let before_len = h.token.get_journal(&id).len();
+    assert_eq!(
+        h.token.try_append_journal_entry(&id, &empty_tag),
+        Err(Ok(Error::from(InvoiceError::EmptyEventTag)))
+    );
+    assert_eq!(h.token.get_journal(&id).len(), before_len);
+
+    // Normal path: a non-empty event tag must be accepted and appended.
+    let tag = String::from_str(&h.env, "compliance_review_passed");
+    h.token.append_journal_entry(&id, &tag);
+    let journal = h.token.get_journal(&id);
+    assert_eq!(journal.len(), before_len + 1);
+    let entry = journal.get(journal.len() - 1).expect("last entry");
+    assert_eq!(entry.event_tag, tag);
+}
