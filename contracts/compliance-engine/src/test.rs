@@ -1550,3 +1550,55 @@ fn test_propose_rules_rejects_empty_description() {
     let proposal = ce.get_pending_proposal().expect("proposal must be stored");
     assert_eq!(proposal.description, desc);
 }
+
+// Fix #844 — deny_transfer: reject empty evaluation reasons
+// Before the fix, deny_transfer did not exist at all, making it impossible to
+// manually log a transfer denial with a traceable reason.  Without an explicit
+// reason the compliance audit trail cannot support post-facto debugging or
+// review of why a specific transfer was refused.
+// The new function requires a non-empty reason string and panics with
+// EmptyEvaluationReason before any state is written when the string is empty.
+#[test]
+fn test_deny_transfer_rejects_empty_reason() {
+    let (env, ce, _) = setup();
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+    let empty = String::from_str(&env, "");
+
+    // Empty reason must be rejected — no event emitted, no state written.
+    assert_eq!(
+        ce.try_deny_transfer(&from, &to, &100, &empty),
+        Err(Ok(Error::from(ComplianceError::EmptyEvaluationReason)))
+    );
+
+    // Normal path: non-empty reason must succeed and emit a deny_xfr event.
+    let reason = String::from_str(&env, "blocklisted jurisdiction flagged by compliance officer");
+    ce.deny_transfer(&from, &to, &100, &reason);
+}
+
+// Fix #846 — append_policy_record: reject empty governance comments
+// Before the fix, there was no public append_policy_record entry point.
+// Blank governance comments would have had to be stored through internal
+// paths, making the policy history hard to interpret.
+// The new public function requires a non-empty comment and panics with
+// EmptyGovernanceComment before any state is written when the string is empty.
+#[test]
+fn test_append_policy_record_rejects_empty_comment() {
+    let (env, ce, _) = setup();
+    let empty = String::from_str(&env, "");
+
+    // Empty governance comment must be rejected — policy version count unchanged.
+    let before = ce.policy_version_count();
+    assert_eq!(
+        ce.try_append_policy_record(&empty),
+        Err(Ok(Error::from(ComplianceError::EmptyGovernanceComment)))
+    );
+    assert_eq!(ce.policy_version_count(), before);
+
+    // Normal path: non-empty comment must succeed and add a new policy version.
+    let comment = String::from_str(&env, "quarterly review — no rule changes required");
+    ce.append_policy_record(&comment);
+    assert_eq!(ce.policy_version_count(), before + 1);
+    let record = ce.get_current_policy_version();
+    assert_eq!(record.description, comment);
+}
