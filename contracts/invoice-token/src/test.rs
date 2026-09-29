@@ -1565,6 +1565,30 @@ fn test_set_fee_recipient_rejects_zero_fee_schedule() {
     assert_eq!(h.token.get_fee_recipient_role(), None);
 }
 
+// Fix — set_fee_recipient: reject zero transfer fee (#850)
+// Before the guard, set_fee_recipient could be called even when every invoice
+// has transfer_fee_bps == 0, storing a role address that would never receive
+// fees.  The fix checks has_positive_transfer_fee before any state is written.
+#[test]
+fn test_set_fee_recipient_rejected_when_all_invoices_have_zero_fee() {
+    let h = setup();
+    let addr = Address::generate(&h.env);
+    h.approve_kyc(&addr);
+
+    // Default setup has one invoice with transfer_fee_bps = 0 — must be rejected.
+    assert_eq!(
+        h.token.try_set_fee_recipient(&addr),
+        Err(Ok(InvoiceError::InvalidMetadata.into()))
+    );
+    assert_eq!(h.token.get_fee_recipient_role(), None);
+
+    // After adding an invoice with a positive fee, the call must succeed.
+    h.token
+        .create_invoice(&make_fee_invoice(&h.env, "FEE-ENABLE-850", None));
+    h.token.set_fee_recipient(&addr);
+    assert_eq!(h.token.get_fee_recipient_role(), Some(addr));
+}
+
 // ── Redemption arithmetic tests ───────────────────────────────────────────────
 
 #[test]
