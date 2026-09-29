@@ -1483,6 +1483,84 @@ fn test_set_tier_policy_rejects_invalid_min_tiers() {
     assert_eq!(ce.tier_policy_count(), 0);
 }
 
+// Fix — set_tier_policy: reject min_from_tier above supported range (#849)
+// A min_from_tier value above 100 is outside the valid tier range and was
+// previously stored silently, making the from-tier enforcement check
+// unpredictable for any address whose tier is within the normal range.
+// The fix rejects it with InvalidTierPolicy before state is written.
+#[test]
+fn test_set_tier_policy_rejects_min_from_tier_above_range() {
+    let (_, ce, _) = setup();
+
+    // min_from_tier = 101 is above the valid range [0, 100] — must be rejected.
+    assert_eq!(
+        ce.try_set_tier_policy(
+            &0u32,
+            &1u32,
+            &TierPolicy {
+                blocked: false,
+                max_transfer_amount: 0,
+                min_from_tier: 101,
+                min_to_tier: 0,
+            }
+        ),
+        Err(Ok(Error::from(ComplianceError::InvalidTierPolicy)))
+    );
+    assert!(ce.get_tier_policy(&0u32, &1u32).is_none());
+
+    // Normal path: min_from_tier at the boundary value 100 must be accepted.
+    ce.set_tier_policy(
+        &0u32,
+        &1u32,
+        &TierPolicy {
+            blocked: false,
+            max_transfer_amount: 0,
+            min_from_tier: 100,
+            min_to_tier: 0,
+        },
+    );
+    assert!(ce.get_tier_policy(&0u32, &1u32).is_some());
+}
+
+// Fix — set_tier_policy: reject min_to_tier above supported range (#848)
+// A min_to_tier value above 100 is outside the valid tier range and was
+// previously stored silently, making the to-tier enforcement check produce
+// confusing compliance decisions for in-range recipients.
+// The fix rejects it with InvalidTierPolicy before state is written.
+#[test]
+fn test_set_tier_policy_rejects_min_to_tier_above_range() {
+    let (_, ce, _) = setup();
+
+    // min_to_tier = 101 is above the valid range [0, 100] — must be rejected.
+    assert_eq!(
+        ce.try_set_tier_policy(
+            &0u32,
+            &1u32,
+            &TierPolicy {
+                blocked: false,
+                max_transfer_amount: 0,
+                min_from_tier: 0,
+                min_to_tier: 101,
+            }
+        ),
+        Err(Ok(Error::from(ComplianceError::InvalidTierPolicy)))
+    );
+    assert!(ce.get_tier_policy(&0u32, &1u32).is_none());
+
+    // Normal path: min_to_tier at the boundary value 100 must be accepted.
+    ce.set_tier_policy(
+        &0u32,
+        &1u32,
+        &TierPolicy {
+            blocked: false,
+            max_transfer_amount: 0,
+            min_from_tier: 0,
+            min_to_tier: 100,
+        },
+    );
+    assert!(ce.get_tier_policy(&0u32, &1u32).is_some());
+}
+
 #[test]
 fn test_policy_records_normalize_empty_descriptions() {
     let (env, ce, _) = setup();
