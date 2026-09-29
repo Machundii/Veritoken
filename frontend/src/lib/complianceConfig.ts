@@ -193,7 +193,7 @@ export function configToRules(config: ComplianceConfigExport): ComplianceRules {
     ["max_holding_period", r.max_holding_period],
   ] as const;
   for (const [field, value] of decimalFields) {
-    if (!/^\d+$/.test(value)) {
+    if (typeof value !== "string" || !/^\d+$/.test(value)) {
       throw new Error(`Invalid rules field "${field}": expected a non-negative decimal string.`);
     }
   }
