@@ -1397,6 +1397,12 @@ impl InvoiceToken {
     }
 
     fn evaluate_transfer_kyc(env: &Env, from: &Address, to: &Address, amount: i128) {
+        if th::get_kyc_state_of(env, from) != th::KycState::Approved {
+            panic_with_error!(env, InvoiceError::KycNotApproved);
+        }
+        if th::get_kyc_state_of(env, to) != th::KycState::Approved {
+            panic_with_error!(env, InvoiceError::KycNotApproved);
+        }
         match th::evaluate_transfer_compliance(env, from, to, amount) {
             th::TransferDecision::Allow => {}
             th::TransferDecision::Deny(ref reason) => {
